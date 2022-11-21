@@ -117,7 +117,7 @@ async function loadTexture(fileName) {
     return await createImageBitmap(await (await fetch("images/" + fileName)).blob());
 }
 
-const tex = await loadTexture("abstract.jpg");
+const tex = await loadTexture("ownimage.jpg");
 let drawCall = app.createDrawCall(program, vertexArray)
     .texture("tex", app.createTexture2D(tex, tex.width, tex.height, {
         magFilter: PicoGL.LINEAR,
@@ -129,12 +129,12 @@ let drawCall = app.createDrawCall(program, vertexArray)
 
 let skyboxDrawCall = app.createDrawCall(skyboxProgram, skyboxArray)
     .texture("cubemap", app.createCubemap({
-        negX: await loadTexture("stormydays_bk.png"),
-        posX: await loadTexture("stormydays_ft.png"),
-        negY: await loadTexture("stormydays_dn.png"),
-        posY: await loadTexture("stormydays_up.png"),
-        negZ: await loadTexture("stormydays_lf.png"),
-        posZ: await loadTexture("stormydays_rt.png")
+        negX: await loadTexture("nx.png"),
+        posX: await loadTexture("ny.png"),
+        negY: await loadTexture("nz.png"),
+        posY: await loadTexture("px.png"),
+        negZ: await loadTexture("py.png"),
+        posZ: await loadTexture("pz.png")
     }));
 
 function draw(timems) {
