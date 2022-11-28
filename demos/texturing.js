@@ -7,7 +7,7 @@
 import PicoGL from "../node_modules/picogl/build/module/picogl.js";
 import {mat4, vec3} from "../node_modules/gl-matrix/esm/index.js";
 
-import {positions, uvs, indices} from "../blender/cube.js";
+import {positions, uvs, indices} from "../blender/torus.js";
 import {positions as planePositions, indices as planeIndices} from "../blender/plane.js";
 
 // language=GLSL
@@ -15,7 +15,8 @@ let fragmentShader = `
     #version 300 es
     precision highp float;
     
-    uniform sampler2D tex;    
+    uniform sampler2D tex;
+    uniform float time;   
     
     in vec2 v_uv;
     
@@ -23,7 +24,7 @@ let fragmentShader = `
     
     void main()
     {        
-        outColor = texture(tex, v_uv);
+        outColor = texture(tex, v_uv - vec2(0.5) * sin(time) * 2.0 + vec2(0.5));
     }
 `;
 
@@ -53,6 +54,7 @@ let skyboxFragmentShader = `
     precision mediump float;
     
     uniform samplerCube cubemap;
+    uniform samplerCube cubemap2;
     uniform mat4 viewProjectionInverse;
     in vec4 v_position;
     
@@ -60,7 +62,10 @@ let skyboxFragmentShader = `
     
     void main() {
       vec4 t = viewProjectionInverse * v_position;
-      outColor = texture(cubemap, normalize(t.xyz / t.w));
+      vec4 col1 = texture(cubemap, normalize(t.xyz / t.w));
+      vec4 col2 = texture(cubemap2, normalize(t.xyz / t.w));
+      outColor = col1 + col2;
+
     }
 `;
 
@@ -121,6 +126,15 @@ let skyboxDrawCall = app.createDrawCall(skyboxProgram, skyboxArray)
         posY: await loadTexture("px.png"),
         negZ: await loadTexture("py.png"),
         posZ: await loadTexture("pz.png")
+    }))
+
+    .texture("cubemap2", app.createCubemap({
+        negX: tex,
+        posX: tex,
+        negY: tex,
+        posY: tex,
+        negZ: tex,
+        posZ: tex
     }));
 
 function draw(timems) {
@@ -152,6 +166,7 @@ function draw(timems) {
     app.enable(PicoGL.DEPTH_TEST);
     app.enable(PicoGL.CULL_FACE);
     drawCall.uniform("modelViewProjectionMatrix", modelViewProjectionMatrix);
+    drawCall.uniform("time", time);
     drawCall.draw();
 
     requestAnimationFrame(draw);
