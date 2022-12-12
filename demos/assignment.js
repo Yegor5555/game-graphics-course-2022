@@ -4,7 +4,7 @@ import PicoGL from "../node_modules/picogl/build/module/picogl.js";
 import {mat4, vec3, mat3, vec4, vec2, quat} from "../node_modules/gl-matrix/esm/index.js";
 
 import {positions, normals, indices} from "../blender/helmet.js"
-import {positions as planePositions, uvs as planeUvs, indices as planeIndices} from "../blender/plane.js"
+import {positions as planePositions, uvs as planeUvs, indices as planeIndices} from "../blender/cube.js"
 
 // ******************************************************
 // **               Light configuration                ** // dont know how to implement =(
