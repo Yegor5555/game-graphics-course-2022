@@ -120,7 +120,7 @@ let drawCall = app.createDrawCall(program, vertexArray)
     .uniform("baseColor", baseColor)
     .uniform("ambientLightColor", ambientLightColor);
 
-let cameraPosition = vec3.fromValues(0, 0, 4);
+let cameraPosition = vec3.fromValues(80, 0, 4);
 mat4.fromXRotation(modelMatrix, -Math.PI / 2);
 
 const positionsBuffer = new Float32Array(numberOfPointLights * 3);
