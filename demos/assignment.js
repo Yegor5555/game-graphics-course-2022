@@ -119,8 +119,8 @@ let mirrorFragmentShader = `
     {                        
         vec2 screenPos = gl_FragCoord.xy / screenSize;
         
-        // 0.03 is a mirror distortion factor, try making a larger distortion         
-        screenPos.x += (texture(distortionMap, v_uv ).r - 0.5) * 1.03;
+        // 3.03 is a mirror distortion factor, try making a larger distortion         
+        //screenPos.x += (texture(distortionMap, v_uv ).r - 0.5);
         outColor = texture(reflectionTex, screenPos);
     }
 `;
@@ -277,7 +277,7 @@ let mirrorDrawCall = app.createDrawCall(mirrorProgram, mirrorArray)
     function renderReflectionTexture()
 {
     app.drawFramebuffer(reflectionBuffer);
-    app.viewport(0, 0, reflectionColorTarget.width, reflectionColorTarget.height);
+    app.viewport(10, 10, reflectionColorTarget.width, reflectionColorTarget.height);
     app.gl.cullFace(app.gl.FRONT);
 
     let reflectionMatrix = calculateSurfaceReflectionMatrix(mat4.create(), mirrorModelMatrix, vec3.fromValues(0, 1, 0));
@@ -326,7 +326,7 @@ function drawMirror() {
 function draw(timems) {
     let time = timems / 1000;
 
-    mat4.perspective(projMatrix, Math.PI / 2.0, 2.0 * app.width / app.height, 14.0, 100.0);
+    mat4.perspective(projMatrix, Math.PI / 2.5, 2.0 * app.width / app.height, 15, 100.0);
     vec3.rotateY(cameraPosition, vec3.fromValues(45, 0, 3.4), vec3.fromValues(0, 0, 0), time * 0.05);
     mat4.lookAt(viewMatrix, cameraPosition, vec3.fromValues(0, -0.5, 0), vec3.fromValues(0, 1, 0));
 
