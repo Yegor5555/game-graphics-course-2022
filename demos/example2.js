@@ -1,80 +1,89 @@
-// This demo demonstrates simple cubemap reflections and more complex planar reflections
-
 import PicoGL from "../node_modules/picogl/build/module/picogl.js";
 import {mat4, vec3, mat3, vec4, vec2} from "../node_modules/gl-matrix/esm/index.js";
 
-import {positions, normals, indices} from "../blender/helmet.js"
+import {positions, normals, indices} from "../blender/android.js"
 import {positions as planePositions, uvs as planeUvs, indices as planeIndices} from "../blender/plane.js"
-
-// ******************************************************
-// **               Light configuration                ** // dont know how to implement =(
-// ******************************************************
+import {positions as secondPositions, uvs as secondUvs, indices as secondIndices} from "../blender/dissk.js"
 
 
-let numberOfLights = 2;
+let baseColor = vec3.fromValues(0.5, 0.8, 0.18);
+let ambientLightColor = vec3.fromValues(0.1, 0.1, 1.0);
+let numberOfPointLights = 2;
 let pointLightColors = [vec3.fromValues(1.0, 1.0, 1.0), vec3.fromValues(0.6, 0.1, 0.2)];
 let pointLightInitialPositions = [vec3.fromValues(5, 0, 2), vec3.fromValues(-5, 0, 2)];
 let pointLightPositions = [vec3.create(), vec3.create()];
 
+
 // language=GLSL
 let lightCalculationShader = `
-    uniform vec3 cameraPos;
+    uniform vec3 cameraPosition;
+    uniform vec3 baseColor;    
     uniform vec3 ambientLightColor;    
-    uniform vec3 lightColors[${numberOfLights}];        
-    uniform vec3 lightPositions[${numberOfLights}];
+    uniform vec3 lightColors[${numberOfPointLights}];        
+    uniform vec3 lightPositions[${numberOfPointLights}];
     
     // This function calculates light reflection using Phong reflection model (ambient + diffuse + specular)
     vec4 calculateLights(vec3 normal, vec3 position) {
-        vec3 viewDirection = normalize(cameraPos.xyz - position);
-        vec4 color = vec4(ambientLightColor, 1.0);
+        float ambientIntensity = 0.5;
+        float diffuseIntensity = 1.0;
+        float specularIntensity = 2.0;
+        float specularPower = 100.0;
+        float metalness = 0.0;
+        vec3 viewDirection = normalize(cameraPosition.xyz - position);
+        vec3 color = baseColor * ambientLightColor * ambientIntensity;
                 
         for (int i = 0; i < lightPositions.length(); i++) {
             vec3 lightDirection = normalize(lightPositions[i] - position);
             
             // Lambertian reflection (ideal diffuse of matte surfaces) is also a part of Phong model                        
-            float diffuse = max(dot(lightDirection, normal), -0.1);                                    
+            float diffuse = max(dot(lightDirection, normal), 0.0);                                    
+            color += baseColor * lightColors[i] * diffuse * diffuseIntensity;
                       
             // Phong specular highlight 
-            float specular = pow(max(dot(viewDirection, reflect(-lightDirection, normal)), 0.0), 30.0);
+            //float specular = pow(max(dot(viewDirection, reflect(-lightDirection, normal)), 0.0), specularPower);
             
-            // Blinn-Phong improved specular highlight                        
-            //float specular = pow(max(dot(normalize(lightDirection + viewDirection), normal), 0.0), 200.0);
-            
-            color.rgb += lightColors[i] * diffuse + specular;
+            // Blinn-Phong improved specular highlight
+            float specular = pow(max(dot(normalize(lightDirection + viewDirection), normal), 0.0), specularPower);
+            color += mix(vec3(1.0), baseColor, metalness) * lightColors[i] * specular * specularIntensity;
         }
-        return color;
+        return vec4(color, 1.0);
     }
 `;
 
 let fragmentShader = `
     #version 300 es
     precision highp float;
+    precision highp sampler2DShadow;
     ${lightCalculationShader}
+    
     uniform samplerCube cubemap;    
         
+    uniform sampler2DShadow shadowMap;
+    in vec3 vPosition;    
     in vec3 vNormal;
+    in vec4 vColor;
     in vec3 viewDir;
-    in vec3 vPosition;  
-    out vec4 outColor;
-
+    in vec4 vPositionFromLight;
+    in vec3 vModelPosition;
     
+    out vec4 outColor;
     
     void main()
-    {        
+    {       
         
-        
-        vec4 light = calculateLights(normalize(vNormal), vPosition);
         vec3 reflectedDir = reflect(viewDir, normalize(vNormal));
-        vec4 ref = texture(cubemap, reflectedDir);
-        outColor = light + ref;
+        //outColor = texture(cubemap, reflectedDir);
         
+        // Try using a higher mipmap LOD to get a rough material effect without any performance impact
+        //outColor = textureLod(cubemap, reflectedDir, 10.0);
+        outColor = calculateLights(normalize(vNormal), vPosition);
     }
 `;
 
 // language=GLSL
 let vertexShader = `
     #version 300 es
-    ${lightCalculationShader} 
+            
     uniform mat4 modelViewProjectionMatrix;
     uniform mat4 modelMatrix;
     uniform mat3 normalMatrix;
@@ -84,21 +93,24 @@ let vertexShader = `
     layout(location=1) in vec3 normal;
     layout(location=2) in vec2 uv;
         
-    out vec2 v_uv;
+    out vec2 vUv;
+    out vec3 vPosition;
     out vec3 vNormal;
     out vec3 viewDir;
-    out vec3 vPosition;  
+    out vec4 vColor;
     
     void main()
     {
         vec4 worldPosition = modelMatrix * position;
-        
         vPosition = worldPosition.xyz;
-        
-        gl_Position = modelViewProjectionMatrix * position;           
-        v_uv = uv;
-        viewDir = (modelMatrix * position).xyz - cameraPosition;                
         vNormal = normalMatrix * normal;
+        //vColor = calculateLights(normalize(vNormal), vPosition);
+        vec4 posi = position;
+        posi.xyz *= 0.5;
+        gl_Position = modelViewProjectionMatrix * posi;           
+        vUv = uv;
+        viewDir = (modelMatrix * position).xyz - cameraPosition;                
+        
     }
 `;
 
@@ -106,12 +118,12 @@ let vertexShader = `
 let mirrorFragmentShader = `
     #version 300 es
     precision highp float;
-    ${lightCalculationShader}
+    
     uniform sampler2D reflectionTex;
     uniform sampler2D distortionMap;
     uniform vec2 screenSize;
     
-    in vec2 v_uv ;        
+    in vec2 vUv;        
         
     out vec4 outColor;
     
@@ -120,7 +132,7 @@ let mirrorFragmentShader = `
         vec2 screenPos = gl_FragCoord.xy / screenSize;
         
         // 0.03 is a mirror distortion factor, try making a larger distortion         
-        screenPos.x += (texture(distortionMap, v_uv ).r - 0.5) * 1.03;
+        screenPos.x += (texture(distortionMap, vUv).r - 0.5) * 0.2;
         outColor = texture(reflectionTex, screenPos);
     }
 `;
@@ -128,19 +140,20 @@ let mirrorFragmentShader = `
 // language=GLSL
 let mirrorVertexShader = `
     #version 300 es
-    ${lightCalculationShader}
+            
     uniform mat4 modelViewProjectionMatrix;
     
     layout(location=0) in vec4 position;   
     layout(location=1) in vec2 uv;
     
-    out vec2 v_uv ;
+    out vec2 vUv;
         
     void main()
     {
-        v_uv  = uv;
+        vUv = uv;
         vec4 pos = position;
-        pos.xz *= 2.0;
+        pos.xyz *= 3.0;
+        //pos.y -= 3.0;
         gl_Position = modelViewProjectionMatrix * pos;
     }
 `;
@@ -176,8 +189,6 @@ let skyboxVertexShader = `
     }
 `;
 
-app.enable(PicoGL.DEPTH_TEST);
-
 let program = app.createProgram(vertexShader, fragmentShader);
 let skyboxProgram = app.createProgram(skyboxVertexShader, skyboxFragmentShader);
 let mirrorProgram = app.createProgram(mirrorVertexShader, mirrorFragmentShader);
@@ -190,6 +201,10 @@ let vertexArray = app.createVertexArray()
 const planePositionsBuffer = app.createVertexBuffer(PicoGL.FLOAT, 3, planePositions);
 const planeUvsBuffer = app.createVertexBuffer(PicoGL.FLOAT, 2, planeUvs);
 const planeIndicesBuffer = app.createIndexBuffer(PicoGL.UNSIGNED_INT, 3, planeIndices);
+
+const secondPositionsBuffer = app.createVertexBuffer(PicoGL.FLOAT, 3, secondPositions);
+const secondUvsBuffer = app.createVertexBuffer(PicoGL.FLOAT, 2, secondUvs);
+const secondIndicesBuffer = app.createIndexBuffer(PicoGL.UNSIGNED_INT, 3, secondIndices);
 
 let skyboxArray = app.createVertexArray()
     .vertexAttributeBuffer(0, planePositionsBuffer)
@@ -252,29 +267,42 @@ async function loadTexture(fileName) {
     return await createImageBitmap(await (await fetch("images/" + fileName)).blob());
 }
 
+
+
 const cubemap = app.createCubemap({
     negX: await loadTexture("nx.png"),
-    posX: await loadTexture("ny.png"),
-    negY: await loadTexture("nz.png"),
-    posY: await loadTexture("px.png"),
-    negZ: await loadTexture("py.png"),
+    posX: await loadTexture("px.png"),
+    negY: await loadTexture("ny.png"),
+    posY: await loadTexture("py.png"),
+    negZ: await loadTexture("nz.png"),
     posZ: await loadTexture("pz.png")
 });
 
 let drawCall = app.createDrawCall(program, vertexArray)
-    .texture("cubemap", cubemap);
+    .texture("cubemap", cubemap)
+    .uniform("baseColor", baseColor)
+    .uniform("ambientLightColor", ambientLightColor);
 
 let skyboxDrawCall = app.createDrawCall(skyboxProgram, skyboxArray)
     .texture("cubemap", cubemap);
 
+const tex = await loadTexture("no_offence.jpg");
 let mirrorDrawCall = app.createDrawCall(mirrorProgram, mirrorArray)
     .texture("reflectionTex", reflectionColorTarget)
-    .texture("distortionMap", app.createTexture2D(await loadTexture("noise.png")));
+    .texture("distortionMap", app.createTexture2D(tex, tex.width, tex.height, {
+        magFilter: PicoGL.LINEAR,
+        minFilter: PicoGL.LINEAR_MIPMAP_LINEAR,
+        maxAnisotropy: 10,
+        wrapS: PicoGL.MIRRORED_REPEAT,
+        wrapT: PicoGL.MIRRORED_REPEAT
+    }));
 
-    const positionsBuffer = new Float32Array(numberOfLights * 3);
-    const colorsBuffer = new Float32Array(numberOfLights * 3);
+mat4.fromXRotation(modelMatrix, -Math.PI / 2);
 
-    function renderReflectionTexture()
+const positionsBuffer = new Float32Array(numberOfPointLights * 3);
+const colorsBuffer = new Float32Array(numberOfPointLights * 3);
+
+function renderReflectionTexture()
 {
     app.drawFramebuffer(reflectionBuffer);
     app.viewport(0, 0, reflectionColorTarget.width, reflectionColorTarget.height);
@@ -308,7 +336,7 @@ function drawObjects(cameraPosition, viewMatrix) {
     skyboxDrawCall.draw();
 
     app.enable(PicoGL.DEPTH_TEST);
-    app.enable(PicoGL.CULL_FACE);
+    //app.enable(PicoGL.CULL_FACE);
     drawCall.uniform("modelViewProjectionMatrix", modelViewProjectionMatrix);
     drawCall.uniform("cameraPosition", cameraPosition);
     drawCall.uniform("modelMatrix", modelMatrix);
@@ -326,25 +354,28 @@ function drawMirror() {
 function draw(timems) {
     let time = timems / 1000;
 
-    mat4.perspective(projMatrix, Math.PI / 2.0, 2.0 * app.width / app.height, 14.0, 100.0);
-    vec3.rotateY(cameraPosition, vec3.fromValues(45, 0, 3.4), vec3.fromValues(0, 0, 0), time * 0.05);
+    mat4.perspective(projMatrix, Math.PI / 2.5, 2.0 * app.width / app.height, 0.1, 100.0);
+    vec3.rotateY(cameraPosition, vec3.fromValues(0, 1, 3.4), vec3.fromValues(0, 0, 0), time * 0.05);
     mat4.lookAt(viewMatrix, cameraPosition, vec3.fromValues(0, -0.5, 0), vec3.fromValues(0, 1, 0));
 
-    for (let i = 0; i < numberOfLights; i++) {
+    for (let i = 0; i < numberOfPointLights; i++) {
         vec3.rotateZ(pointLightPositions[i], pointLightInitialPositions[i], vec3.fromValues(0, 0, 0), time);
         positionsBuffer.set(pointLightPositions[i], i * 3);
-        
         colorsBuffer.set(pointLightColors[i], i * 3);
     }
 
     drawCall.uniform("lightPositions[0]", positionsBuffer);
     drawCall.uniform("lightColors[0]", colorsBuffer);
 
-   
+    app.clear();
+    drawCall.draw();
+
+    mat4.fromXRotation(rotateXMatrix, time * 2 - Math.PI / 2);
+    mat4.fromZRotation(rotateYMatrix, time * 3);
     mat4.mul(modelMatrix, rotateXMatrix, rotateYMatrix);
 
-    
-    mat4.fromYRotation(rotateYMatrix, time * 0.2354);
+    mat4.fromXRotation(rotateXMatrix, 0.0);
+    mat4.fromYRotation(rotateYMatrix, 1.0);
     mat4.mul(mirrorModelMatrix, rotateYMatrix, rotateXMatrix);
     mat4.translate(mirrorModelMatrix, mirrorModelMatrix, vec3.fromValues(0, -1, 0));
 
@@ -353,10 +384,5 @@ function draw(timems) {
     drawMirror();
 
     requestAnimationFrame(draw);
-
-    
-
-   
 }
-
 requestAnimationFrame(draw);
