@@ -286,7 +286,7 @@ let drawCall = app.createDrawCall(program, vertexArray)
 let skyboxDrawCall = app.createDrawCall(skyboxProgram, skyboxArray)
     .texture("cubemap", cubemap);
 
-const tex = await loadTexture("no_offence.jpg");
+const tex = await loadTexture("darth.jpg");  //not working
 let mirrorDrawCall = app.createDrawCall(mirrorProgram, mirrorArray)
     .texture("reflectionTex", reflectionColorTarget)
     .texture("distortionMap", app.createTexture2D(tex, tex.width, tex.height, {

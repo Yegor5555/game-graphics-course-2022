@@ -10,6 +10,7 @@ import {positions as planePositions, uvs as planeUvs, indices as planeIndices} f
 // **               Light configuration                ** // dont know how to implement =(
 // ******************************************************
 
+let baseColor = vec3.fromValues(0.5, 0.8, 0.18);
 
 let numberOfLights = 2;
 let pointLightColors = [vec3.fromValues(1.0, 1.0, 1.0), vec3.fromValues(0.6, 0.1, 0.2)];
@@ -19,6 +20,7 @@ let pointLightPositions = [vec3.create(), vec3.create()];
 // language=GLSL
 let lightCalculationShader = `
     uniform vec3 cameraPos;
+    uniform vec3 baseColor; 
     uniform vec3 ambientLightColor;    
     uniform vec3 lightColors[${numberOfLights}];        
     uniform vec3 lightPositions[${numberOfLights}];
@@ -119,7 +121,7 @@ let mirrorFragmentShader = `
     {                        
         vec2 screenPos = gl_FragCoord.xy / screenSize;
         
-        // 3.03 is a mirror distortion factor, try making a larger distortion         
+        // 1.03 is a mirror distortion factor, try making a larger distortion         
         //screenPos.x += (texture(distortionMap, v_uv ).r - 0.5);
         outColor = texture(reflectionTex, screenPos);
     }
@@ -263,13 +265,22 @@ const cubemap = app.createCubemap({
 
 let drawCall = app.createDrawCall(program, vertexArray)
     .texture("cubemap", cubemap);
+    
+    
 
 let skyboxDrawCall = app.createDrawCall(skyboxProgram, skyboxArray)
     .texture("cubemap", cubemap);
 
-let mirrorDrawCall = app.createDrawCall(mirrorProgram, mirrorArray)
-    .texture("reflectionTex", reflectionColorTarget)
-    .texture("distortionMap", app.createTexture2D(await loadTexture("noise.png")));
+    const tex = await loadTexture("darth.jpg"); //NOT WORKING
+    let mirrorDrawCall = app.createDrawCall(mirrorProgram, mirrorArray)
+        .texture("reflectionTex", reflectionColorTarget)
+        .texture("distortionMap", app.createTexture2D(tex, tex.width, tex.height, {
+            magFilter: PicoGL.LINEAR,
+            minFilter: PicoGL.LINEAR,
+            maxAnisotropy: 10,
+            wrapS: PicoGL.MIRRORED_REPEAT,
+            wrapT: PicoGL.MIRRORED_REPEAT
+        }));
 
     const positionsBuffer = new Float32Array(numberOfLights * 3);
     const colorsBuffer = new Float32Array(numberOfLights * 3);
@@ -277,7 +288,7 @@ let mirrorDrawCall = app.createDrawCall(mirrorProgram, mirrorArray)
     function renderReflectionTexture()
 {
     app.drawFramebuffer(reflectionBuffer);
-    app.viewport(10, 10, reflectionColorTarget.width, reflectionColorTarget.height);
+    app.viewport(0, 0, reflectionColorTarget.width, reflectionColorTarget.height);
     app.gl.cullFace(app.gl.FRONT);
 
     let reflectionMatrix = calculateSurfaceReflectionMatrix(mat4.create(), mirrorModelMatrix, vec3.fromValues(0, 1, 0));
